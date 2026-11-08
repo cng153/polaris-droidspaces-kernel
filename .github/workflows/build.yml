@@ -96,7 +96,7 @@ jobs:
           set +e
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
             KCFLAGS="-Wno-error" \
-            KCPPFLAGS="-I$PWD/drivers/bluetooth -I$PWD/drivers/usb/dwc3 -I$PWD/drivers/usb/phy -I$PWD/drivers/usb/misc -I$PWD/drivers/usb/gadget -I$PWD/techpack/audio/include -I$PWD/techpack/audio/asoc -I$PWD/drivers/clk/qcom/mdss -I$PWD/drivers/gpu/drm/msm" \
+            KCPPFLAGS="-I$PWD/drivers/bluetooth -I$PWD/drivers/usb/dwc3 -I$PWD/drivers/usb/phy -I$PWD/drivers/usb/misc -I$PWD/drivers/usb/gadget -I$PWD/techpack/audio/include -I$PWD/techpack/audio/asoc -I$PWD/drivers/clk/qcom/mdss -I$PWD/drivers/gpu/drm/msm -I$PWD/drivers/gpu/msm -I$PWD/drivers/media/platform/msm" \
             -k -j$(nproc) Image.gz > /tmp/build.log 2>&1
           RC=$?
           echo "make_exit=$RC"
