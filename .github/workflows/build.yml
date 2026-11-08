@@ -96,19 +96,20 @@ jobs:
           set +e
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
             KCFLAGS="-Wno-error" \
-            KCPPFLAGS="-I$PWD/drivers/bluetooth -I$PWD/drivers/bluetooth" \
+            KCPPFLAGS="-I$PWD/drivers/bluetooth -I$PWD/drivers/usb/dwc3 -I$PWD/drivers/usb/phy -I$PWD/drivers/usb/misc -I$PWD/drivers/usb/gadget -I$PWD/techpack/audio/include" \
             -k -j$(nproc) Image.gz > /tmp/build.log 2>&1
           RC=$?
           echo "make_exit=$RC"
-          echo "---- error lines ----"
-          grep -nE "error:|Error [0-9]|No such file" /tmp/build.log | head -60
-          echo "---- tail 80 ----"
-          tail -80 /tmp/build.log
           if [ $RC -ne 0 ]; then
-            echo "BUILD FAILED"
+            echo "========== ERROR SUMMARY =========="
+            echo "total error lines: $(grep -cE 'error:' /tmp/build.log || true)"
+            echo "========== FIRST ERRORS (with context) =========="
+            grep -nE -B4 -A8 "error:" /tmp/build.log | head -160
+            echo "========== END OF ERRORS =========="
             free -m
             exit 1
           fi
+          tail -20 /tmp/build.log
           ls -lh arch/arm64/boot/Image.gz
 
       - name: Build dtbs and append
