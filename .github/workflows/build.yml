@@ -22,6 +22,7 @@ jobs:
           git clone --depth 1 -b lineage-22.2 https://github.com/LineageOS/android_kernel_xiaomi_sdm845.git kernel
           cd kernel
           git log -1 --oneline
+          ls drivers/bluetooth/btfm_slim*
 
       - name: Merge configs
         run: |
@@ -87,17 +88,22 @@ jobs:
             cat "$BASE" "$FRAG" /tmp/ds.fragment > .config
           fi
           make ARCH=arm64 olddefconfig
-          grep -E "^CONFIG_(PID_NS|UTS_NS|IPC_NS|USER_NS|NET_NS|SYSVIPC|CGROUPS|MEMCG|OVERLAY_FS|VETH|DEVTMPFS|SECCOMP)=" .config
+          grep -E "^CONFIG_(PID_NS|UTS_NS|IPC_NS|USER_NS|NET_NS|SYSVIPC|CGROUPS|MEMCG|OVERLAY_FS|VETH|DEVTMPFS|SECCOMP|BTFM_SLIM)=" .config
 
       - name: Build Image.gz
         run: |
           cd kernel
           set +e
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KCFLAGS="-Wno-error" -j$(nproc) Image.gz > /tmp/build.log 2>&1
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
+            KCFLAGS="-Wno-error" \
+            KCPPFLAGS="-I$PWD/drivers/bluetooth -I$PWD/drivers/bluetooth" \
+            -k -j$(nproc) Image.gz > /tmp/build.log 2>&1
           RC=$?
           echo "make_exit=$RC"
-          echo "---- last 120 lines ----"
-          tail -120 /tmp/build.log
+          echo "---- error lines ----"
+          grep -nE "error:|Error [0-9]|No such file" /tmp/build.log | head -60
+          echo "---- tail 80 ----"
+          tail -80 /tmp/build.log
           if [ $RC -ne 0 ]; then
             echo "BUILD FAILED"
             free -m
@@ -111,8 +117,8 @@ jobs:
           set +e
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j$(nproc) dtbs >> /tmp/build.log 2>&1
           echo "dtbs_exit=$?"
-          echo "polaris dtb count: $(ls arch/arm64/boot/dts/qcom/ | grep -ci polaris)"
-          ls arch/arm64/boot/dts/qcom/ | grep -i polaris
+          echo "polaris dtb count: $(ls arch/arm64/boot/dts/qcom/ 2>/dev/null | grep -ci polaris)"
+          ls arch/arm64/boot/dts/qcom/ 2>/dev/null | grep -i polaris
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image.gz-dtb >> /tmp/build.log 2>&1
           echo "imgdtb_exit=$?"
           tail -40 /tmp/build.log
@@ -130,7 +136,7 @@ jobs:
           sed -i 's/^kernel.string=.*/kernel.string=polaris droidspaces kernel/' anykernel.sh
           sed -i 's/^device.name1=.*/device.name1=polaris/' anykernel.sh
           sed -i 's/^device.name2=.*/device.name2=/; s/^device.name3=.*/device.name3=/; s/^device.name4=.*/device.name4=/; s/^device.name5=.*/device.name5=/' anykernel.sh
-          head -30 anykernel.sh
+          head -20 anykernel.sh
           zip -r9 ../polaris-droidspaces-kernel.zip * -x .git/*
 
       - name: Diagnostics on failure
