@@ -78,17 +78,26 @@ jobs:
           CONFIG_BLK_DEV_LOOP=y
           CONFIG_EXT4_FS=y
           CONFIG_EXT4_FS_POSIX_ACL=y
+          CONFIG_PM=y
+          CONFIG_SMP=y
+          CONFIG_SUSPEND=y
+          CONFIG_PM_SLEEP=y
+          CONFIG_PM_SLEEP_SMP=y
+          CONFIG_PM_DEBUG=y
+          CONFIG_PM_WAKELOCKS=y
           EOF
           export ARCH=arm64
           chmod +x scripts/kconfig/merge_config.sh
-          if ./scripts/kconfig/merge_config.sh -m "$BASE" "$FRAG" /tmp/ds.fragment; then
+          if ./scripts/kconfig/merge_config.sh -m "$BASE" "$FRAG" /tmp/ds.fragment > /tmp/merge.log 2>&1; then
             echo "MERGED via merge_config.sh"
           else
             echo "FALLBACK: plain concat"
             cat "$BASE" "$FRAG" /tmp/ds.fragment > .config
           fi
-          make ARCH=arm64 olddefconfig
-          grep -E "^CONFIG_(PID_NS|UTS_NS|IPC_NS|USER_NS|NET_NS|SYSVIPC|CGROUPS|MEMCG|OVERLAY_FS|VETH|DEVTMPFS|SECCOMP|BTFM_SLIM)=" .config
+          tail -5 /tmp/merge.log || true
+          make ARCH=arm64 olddefconfig 2>&1 | tail -8
+          echo "olddefconfig_rc=${PIPESTATUS[0]}"
+          grep -E "^CONFIG_(PM|SMP|SUSPEND|PM_SLEEP|PID_NS|UTS_NS|IPC_NS|USER_NS|NET_NS|SYSVIPC|CGROUPS|MEMCG|OVERLAY_FS|VETH|DEVTMPFS|SECCOMP|BTFM_SLIM)=" .config | sort | head -40
 
       - name: Build Image.gz
         run: |
