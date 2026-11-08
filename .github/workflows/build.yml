@@ -93,11 +93,14 @@ jobs:
       - name: Build Image.gz
         run: |
           cd kernel
+          TRACE_INCS=$(find drivers techpack -name '*_trace.h' -printf '%h\n' 2>/dev/null | sort -u | sed "s|^|-I$PWD/|" | tr '\n' ' ')
+          echo "trace include dirs: $(echo $TRACE_INCS | wc -w)"
+          EXTRA_INCS="-I$PWD/drivers/bluetooth -I$PWD/drivers/usb/dwc3 -I$PWD/drivers/usb/phy -I$PWD/drivers/usb/misc -I$PWD/drivers/usb/gadget -I$PWD/techpack/audio/include -I$PWD/techpack/audio/asoc -I$PWD/drivers/clk/qcom/mdss -I$PWD/drivers/gpu/drm/msm -I$PWD/drivers/gpu/msm -I$PWD/drivers/media/platform/msm -I$PWD/drivers/platform/msm/ipa"
           set +e
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
             KCFLAGS="-Wno-error -Wno-error=implicit-function-declaration -Wno-implicit-function-declaration -Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-error=misleading-indentation -Wno-error=attribute-warning -Wno-error=maybe-uninitialized -Wno-error=unused-variable" \
             KBUILD_MODPOST_WARN=1 \
-            KCPPFLAGS="-I$PWD/drivers/bluetooth -I$PWD/drivers/usb/dwc3 -I$PWD/drivers/usb/phy -I$PWD/drivers/usb/misc -I$PWD/drivers/usb/gadget -I$PWD/techpack/audio/include -I$PWD/techpack/audio/asoc -I$PWD/drivers/clk/qcom/mdss -I$PWD/drivers/gpu/drm/msm -I$PWD/drivers/gpu/msm -I$PWD/drivers/media/platform/msm" \
+            KCPPFLAGS="$EXTRA_INCS $TRACE_INCS" \
             -k -j$(nproc) Image.gz > /tmp/build.log 2>&1
           RC=$?
           echo "make_exit=$RC"
