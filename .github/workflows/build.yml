@@ -115,10 +115,12 @@ jobs:
           echo "make_exit=$RC"
           if [ $RC -ne 0 ]; then
             echo "========== ERROR SUMMARY =========="
-            echo "total error lines: $(grep -cE 'error:' /tmp/build.log || true)"
+            echo "total error lines: $(grep -cE 'error:|Error [0-9]' /tmp/build.log || true)"
             echo "========== FIRST ERRORS (with context) =========="
-            grep -nE -B4 -A8 "error:" /tmp/build.log | head -160
+            grep -nE -B6 -A10 "error:|Error [0-9]|No rule to make target" /tmp/build.log | head -200
             echo "========== END OF ERRORS =========="
+            echo "========== LAST 90 LINES OF LOG =========="
+            tail -90 /tmp/build.log
             free -m
             exit 1
           fi
