@@ -20,21 +20,20 @@ jobs:
         run: |
           git clone --depth 1 -b lineage-22.2 https://github.com/LineageOS/android_kernel_xiaomi_sdm845.git kernel
           cd kernel
-          echo "== HEAD =="
           git log -1 --oneline
-          echo "== polaris configs =="
-          find arch/arm64/configs -iname '*polaris*' | head -10
+          echo "== vendor configs =="
+          ls arch/arm64/configs/vendor
+          echo "== xiaomi configs =="
+          ls arch/arm64/configs/vendor/xiaomi
 
-      - name: Configure with Droidspaces options
+      - name: Merge configs
         run: |
           cd kernel
-          BASE=$(find arch/arm64/configs -iname '*polaris*defconfig' | head -1)
-          echo "BASE=$BASE"
-          test -n "$BASE"
-          cp "$BASE" arch/arm64/configs/ds_build_defconfig
-          cat >> arch/arm64/configs/ds_build_defconfig <<'EOF'
-
-          # ---- Droidspaces container support ----
+          BASE=arch/arm64/configs/vendor/sdm845_defconfig
+          FRAG=arch/arm64/configs/vendor/xiaomi/polaris.config
+          test -f "$BASE"
+          test -f "$FRAG"
+          cat > /tmp/ds.fragment <<'EOF'
           CONFIG_SYSVIPC=y
           CONFIG_POSIX_MQUEUE=y
           CONFIG_NAMESPACES=y
@@ -42,6 +41,7 @@ jobs:
           CONFIG_UTS_NS=y
           CONFIG_IPC_NS=y
           CONFIG_USER_NS=y
+          CONFIG_NET_NS=y
           CONFIG_SECCOMP=y
           CONFIG_SECCOMP_FILTER=y
           CONFIG_CGROUPS=y
@@ -61,8 +61,6 @@ jobs:
           CONFIG_OVERLAY_FS=y
           CONFIG_TMPFS_POSIX_ACL=y
           CONFIG_TMPFS_XATTR=y
-          CONFIG_FW_LOADER_USER_HELPER=y
-          CONFIG_NET_NS=y
           CONFIG_VETH=y
           CONFIG_BRIDGE=y
           CONFIG_NETFILTER=y
@@ -81,54 +79,48 @@ jobs:
           CONFIG_TUN=y
           CONFIG_BLK_DEV_LOOP=y
           CONFIG_EXT4_FS=y
+          CONFIG_EXT4_FS_POSIX_ACL=y
           EOF
-          make ARCH=arm64 ds_build_defconfig
+          export ARCH=arm64
+          chmod +x scripts/kconfig/merge_config.sh
+          if ./scripts/kconfig/merge_config.sh -m "$BASE" "$FRAG" /tmp/ds.fragment; then
+            echo "MERGED via merge_config.sh"
+          else
+            echo "FALLBACK: plain concat"
+            cat "$BASE" "$FRAG" /tmp/ds.fragment > .config
+          fi
           make ARCH=arm64 olddefconfig
+          echo "==== .config head ===="
+          head -5 .config
 
       - name: Verify required options
         run: |
           cd kernel
           FAIL=0
-          for o in PID_NS IPC_NS UTS_NS USER_NS NET_NS NAMESPACES SECCOMP CGROUPS DEVTMPFS OVERLAY_FS VETH SYSVIPC POSIX_MQUEUE MEMCG BLK_DEV_LOOP EXT4_FS; do
+          for o in PID_NS IPC_NS UTS_NS USER_NS NET_NS NAMESPACES SECCOMP CGROUPS DEVTMPFS OVERLAY_FS VETH BRIDGE SYSVIPC POSIX_MQUEUE MEMCG BLK_DEV_LOOP EXT4_FS CGROUP_PIDS FUSE_FS TUN; do
             if grep -q "^CONFIG_$o=y" .config; then echo "OK   $o"; else echo "MISS $o"; FAIL=1; fi
           done
-          echo "---- kernel version ----"
-          make ARCH=arm64 kernelversion
           echo "FAIL=$FAIL"
+          if [ "$FAIL" = "1" ]; then echo "Some options missing, continuing anyway"; fi
+          make ARCH=arm64 kernelversion
 
       - name: Build kernel
         run: |
           cd kernel
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KCFLAGS="-Wno-error" -j$(nproc) Image.gz-dtb 2>&1 | tail -60
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KCFLAGS="-Wno-error" -j$(nproc) Image.gz-dtb 2>&1 | tail -80
           echo "==== boot dir ===="
           ls -lh arch/arm64/boot/
-
-      - name: Build out-of-tree modules and stage
-        run: |
-          cd kernel
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j$(nproc) modules 2>&1 | tail -30 || true
-          mkdir -p /tmp/modules
-          find . -name '*.ko' -exec cp {} /tmp/modules/ \; 2>/dev/null || true
-          ls /tmp/modules | head -20
-          ls /tmp/modules | wc -l
 
       - name: Package AnyKernel3 zip
         run: |
           git clone --depth 1 https://github.com/osm0sis/AnyKernel3.git ak3
           cd ak3
           rm -f Image* zImage* dtb* *.ko
-          if [ -f ../kernel/arch/arm64/boot/Image.gz-dtb ]; then
-            cp ../kernel/arch/arm64/boot/Image.gz-dtb .
-          elif [ -f ../kernel/arch/arm64/boot/Image.gz ]; then
-            cp ../kernel/arch/arm64/boot/Image.gz .
-          else
-            cp ../kernel/arch/arm64/boot/Image .
-          fi
-          cp /tmp/modules/*.ko . 2>/dev/null || true
+          cp ../kernel/arch/arm64/boot/Image.gz-dtb ./Image.gz-dtb
           sed -i 's/^kernel.string=.*/kernel.string=polaris droidspaces kernel/' anykernel.sh
           sed -i 's/^device.name1=.*/device.name1=polaris/' anykernel.sh
           sed -i 's/^device.name2=.*/device.name2=/; s/^device.name3=.*/device.name3=/; s/^device.name4=.*/device.name4=/; s/^device.name5=.*/device.name5=/' anykernel.sh
-          cat anykernel.sh | head -40
+          head -45 anykernel.sh
           zip -r9 ../polaris-droidspaces-kernel.zip * -x .git/*
 
       - name: Upload artifact
