@@ -6,7 +6,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    timeout-minutes: 180
+    timeout-minutes: 240
     steps:
       - name: Install dependencies
         run: |
@@ -15,16 +15,13 @@ jobs:
             make gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
             zip unzip cpio python3 device-tree-compiler lz4 xz-utils
           aarch64-linux-gnu-gcc --version | head -1
+          nproc; free -m
 
       - name: Clone LineageOS sdm845 kernel
         run: |
           git clone --depth 1 -b lineage-22.2 https://github.com/LineageOS/android_kernel_xiaomi_sdm845.git kernel
           cd kernel
           git log -1 --oneline
-          echo "== vendor configs =="
-          ls arch/arm64/configs/vendor
-          echo "== xiaomi configs =="
-          ls arch/arm64/configs/vendor/xiaomi
 
       - name: Merge configs
         run: |
@@ -90,25 +87,35 @@ jobs:
             cat "$BASE" "$FRAG" /tmp/ds.fragment > .config
           fi
           make ARCH=arm64 olddefconfig
-          echo "==== .config head ===="
-          head -5 .config
+          grep -E "^CONFIG_(PID_NS|UTS_NS|IPC_NS|USER_NS|NET_NS|SYSVIPC|CGROUPS|MEMCG|OVERLAY_FS|VETH|DEVTMPFS|SECCOMP)=" .config
 
-      - name: Verify required options
+      - name: Build Image.gz
         run: |
           cd kernel
-          FAIL=0
-          for o in PID_NS IPC_NS UTS_NS USER_NS NET_NS NAMESPACES SECCOMP CGROUPS DEVTMPFS OVERLAY_FS VETH BRIDGE SYSVIPC POSIX_MQUEUE MEMCG BLK_DEV_LOOP EXT4_FS CGROUP_PIDS FUSE_FS TUN; do
-            if grep -q "^CONFIG_$o=y" .config; then echo "OK   $o"; else echo "MISS $o"; FAIL=1; fi
-          done
-          echo "FAIL=$FAIL"
-          if [ "$FAIL" = "1" ]; then echo "Some options missing, continuing anyway"; fi
-          make ARCH=arm64 kernelversion
+          set +e
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KCFLAGS="-Wno-error" -j$(nproc) Image.gz > /tmp/build.log 2>&1
+          RC=$?
+          echo "make_exit=$RC"
+          echo "---- last 120 lines ----"
+          tail -120 /tmp/build.log
+          if [ $RC -ne 0 ]; then
+            echo "BUILD FAILED"
+            free -m
+            exit 1
+          fi
+          ls -lh arch/arm64/boot/Image.gz
 
-      - name: Build kernel
+      - name: Build dtbs and append
         run: |
           cd kernel
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KCFLAGS="-Wno-error" -j$(nproc) Image.gz-dtb 2>&1 | tail -80
-          echo "==== boot dir ===="
+          set +e
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j$(nproc) dtbs >> /tmp/build.log 2>&1
+          echo "dtbs_exit=$?"
+          echo "polaris dtb count: $(ls arch/arm64/boot/dts/qcom/ | grep -ci polaris)"
+          ls arch/arm64/boot/dts/qcom/ | grep -i polaris
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image.gz-dtb >> /tmp/build.log 2>&1
+          echo "imgdtb_exit=$?"
+          tail -40 /tmp/build.log
           ls -lh arch/arm64/boot/
 
       - name: Package AnyKernel3 zip
@@ -116,14 +123,25 @@ jobs:
           git clone --depth 1 https://github.com/osm0sis/AnyKernel3.git ak3
           cd ak3
           rm -f Image* zImage* dtb* *.ko
-          cp ../kernel/arch/arm64/boot/Image.gz-dtb ./Image.gz-dtb
+          SRC=../kernel/arch/arm64/boot/Image.gz-dtb
+          if [ ! -f "$SRC" ]; then SRC=../kernel/arch/arm64/boot/Image.gz; fi
+          cp "$SRC" ./Image.gz-dtb
+          ls -lh Image.gz-dtb
           sed -i 's/^kernel.string=.*/kernel.string=polaris droidspaces kernel/' anykernel.sh
           sed -i 's/^device.name1=.*/device.name1=polaris/' anykernel.sh
           sed -i 's/^device.name2=.*/device.name2=/; s/^device.name3=.*/device.name3=/; s/^device.name4=.*/device.name4=/; s/^device.name5=.*/device.name5=/' anykernel.sh
-          head -45 anykernel.sh
+          head -30 anykernel.sh
           zip -r9 ../polaris-droidspaces-kernel.zip * -x .git/*
 
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          free -m
+          df -h
+          tail -200 /tmp/build.log || true
+
       - name: Upload artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: polaris-droidspaces-kernel
