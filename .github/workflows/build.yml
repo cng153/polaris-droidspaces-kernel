@@ -102,7 +102,7 @@ jobs:
       - name: Build Image.gz
         run: |
           cd kernel
-          EXTRA_INCS="-I$PWD/drivers/bluetooth -I$PWD/drivers/usb/dwc3 -I$PWD/drivers/usb/phy -I$PWD/drivers/usb/gadget -I$PWD/techpack/audio/include -I$PWD/techpack/audio/asoc -I$PWD/drivers/clk/qcom/mdss -I$PWD/drivers/gpu/msm -I$PWD/drivers/platform/msm/ipa -I$PWD/drivers/platform/msm/ipa/ipa_v3 -I$PWD/drivers/platform/msm/ipa/ipa_clients -I$PWD/drivers/power/supply/qcom -I$PWD/drivers/soc/qcom"
+          EXTRA_INCS="-I$PWD/drivers/bluetooth -I$PWD/drivers/usb/phy -I$PWD/drivers/usb/gadget -I$PWD/techpack/audio/include -I$PWD/techpack/audio/asoc -I$PWD/drivers/clk/qcom/mdss -I$PWD/drivers/gpu/msm -I$PWD/drivers/platform/msm/ipa -I$PWD/drivers/platform/msm/ipa/ipa_v3 -I$PWD/drivers/platform/msm/ipa/ipa_clients -I$PWD/drivers/power/supply/qcom -I$PWD/drivers/soc/qcom"
           CAM_INCS=$(find drivers/media/platform/msm/camera drivers/media/platform/msm/camera_v3 techpack/audio -type d 2>/dev/null | sed "s|^|-I$PWD/|" | tr '\n' ' ')
           echo "camera/audio subdir include count: $(echo $CAM_INCS | wc -w)"
           set +e
