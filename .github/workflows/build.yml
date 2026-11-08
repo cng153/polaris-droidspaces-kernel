@@ -93,13 +93,15 @@ jobs:
       - name: Build Image.gz
         run: |
           cd kernel
-          LINKED=0
+          declare -A CNT
+          while IFS= read -r h; do b=$(basename "$h"); CNT[$b]=$(( ${CNT[$b]:-0} + 1 )); done < <(find drivers techpack -name '*.h' 2>/dev/null)
+          LINKED=0; SKIPPED=0
           while IFS= read -r h; do
-            base=$(basename "$h")
-            if [ ! -e "./$base" ]; then ln -sf "$PWD/$h" "./$base"; LINKED=$((LINKED+1)); fi
+            b=$(basename "$h")
+            if [ "${CNT[$b]}" -eq 1 ] && [ ! -e "./$b" ]; then ln -sf "$PWD/$h" "./$b"; LINKED=$((LINKED+1)); else SKIPPED=$((SKIPPED+1)); fi
           done < <(find drivers techpack -name '*.h' 2>/dev/null)
-          echo "symlinked headers in kernel root: $LINKED"
-          EXTRA_INCS="-I$PWD -I$PWD/drivers/bluetooth -I$PWD/drivers/usb/dwc3 -I$PWD/drivers/usb/phy -I$PWD/techpack/audio/include -I$PWD/techpack/audio/asoc -I$PWD/drivers/clk/qcom/mdss -I$PWD/drivers/gpu/msm -I$PWD/drivers/media/platform/msm -I$PWD/drivers/platform/msm/ipa -I$PWD/drivers/power/supply/qcom"
+          echo "symlinked unique headers: $LINKED, skipped(duplicate-name or exists): $SKIPPED"
+          EXTRA_INCS="-I$PWD/drivers/bluetooth -I$PWD/drivers/usb/dwc3 -I$PWD/drivers/usb/phy -I$PWD/techpack/audio/include -I$PWD/techpack/audio/asoc -I$PWD/drivers/clk/qcom/mdss -I$PWD/drivers/gpu/msm -I$PWD/drivers/media/platform/msm -I$PWD/drivers/platform/msm/ipa -I$PWD/drivers/power/supply/qcom -I$PWD"
           set +e
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
             KCFLAGS="-Wno-error -Wno-error=implicit-function-declaration -Wno-implicit-function-declaration -Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-error=misleading-indentation -Wno-error=attribute-warning -Wno-error=maybe-uninitialized -Wno-error=unused-variable" \
