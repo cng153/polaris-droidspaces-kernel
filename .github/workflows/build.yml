@@ -87,6 +87,13 @@ jobs:
           CONFIG_PM_WAKELOCKS=y
           # CONFIG_EFI is not set
           # CONFIG_EFI_STUB is not set
+          CONFIG_WLAN=y
+          CONFIG_CFG80211=y
+          CONFIG_CFG80211_WEXT=y
+          CONFIG_WEXT_CORE=y
+          CONFIG_WEXT_PRIV=y
+          CONFIG_ICNSS=y
+          CONFIG_QCA_CLD_WLAN=y
           EOF
           export ARCH=arm64
           chmod +x scripts/kconfig/merge_config.sh
